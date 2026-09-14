@@ -1,0 +1,311 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>FRW Trainer</title>
+<style>
+  :root{
+    --paper:#fff; --ledger:#eceeea; --line:#111; --ink:#1f3a93;
+    --ok:#2e7d32; --bad:#b3261e; --mute:#5c5c5c;
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{margin:0;background:var(--paper);color:var(--line);font-family:Helvetica,Arial,sans-serif;font-size:20px;line-height:1.3}
+  body{padding:18px 20px 40px;max-width:1000px;margin:0 auto}
+  button{font:inherit;color:inherit;background:var(--paper);border:2px solid var(--line);border-radius:6px;padding:14px 18px;min-height:60px;cursor:pointer}
+  button:focus-visible{outline:3px solid var(--ink);outline-offset:2px}
+  button:active{background:var(--ledger)}
+  button:disabled{opacity:.45}
+
+  nav{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:22px}
+  nav button{min-height:52px;padding:10px 16px;font-size:18px}
+  nav button.on{background:var(--line);color:#fff}
+
+  .score{color:var(--mute);font-size:17px;margin-bottom:10px}
+  .case{font-size:26px;font-weight:bold;margin:6px 0 4px}
+  .amount{font-size:20px;color:var(--mute);margin-bottom:18px}
+
+  /* T-account */
+  .t{display:grid;grid-template-columns:1fr 1fr;background:var(--ledger);border-bottom:2px solid var(--line);margin-bottom:18px}
+  .t>div{padding:14px 16px;min-height:96px}
+  .t>div:first-child{border-right:2px solid var(--line)}
+  .t .h{font-size:17px;color:var(--mute);margin-bottom:6px}
+  .t .v{font-size:24px;font-weight:bold;color:var(--ink);min-height:32px}
+  .t .v.blank{color:#9a9a9a;font-weight:normal}
+  .t>div.active{box-shadow:inset 0 0 0 3px var(--ink)}
+
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:10px}
+  .grid button{text-align:left;font-size:19px;padding:12px 14px}
+  .grid button.pick{border-color:var(--ink);color:var(--ink)}
+
+  .fb{margin:18px 0;padding:16px 18px;border-left:6px solid var(--line);background:var(--ledger)}
+  .fb.ok{border-color:var(--ok)} .fb.bad{border-color:var(--bad)}
+  .fb .head{font-weight:bold;font-size:22px;margin-bottom:6px}
+  .fb.ok .head{color:var(--ok)} .fb.bad .head{color:var(--bad)}
+  .fb .why{font-size:18px;color:#222}
+
+  .next{width:100%;font-size:22px;background:var(--line);color:#fff;margin-top:6px}
+
+  .classes{display:grid;grid-template-columns:repeat(9,1fr);gap:8px;margin:10px 0 18px}
+  .classes button{font-size:26px;font-weight:bold;min-height:72px;padding:0}
+  .two{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  .two button{font-size:22px;min-height:80px}
+
+  table{width:100%;border-collapse:collapse;margin:8px 0 26px;font-size:18px}
+  th,td{border:1px solid var(--line);padding:9px 11px;text-align:left;vertical-align:top}
+  th{background:var(--ledger)}
+  td.n{width:52px;font-weight:bold;font-size:22px;text-align:center}
+  h2{font-size:22px;margin:24px 0 6px}
+  .hidden{display:none}
+  @media (max-width:600px){
+    body{font-size:18px;padding:12px}
+    .classes{grid-template-columns:repeat(5,1fr)}
+    .case{font-size:22px}
+  }
+</style>
+</head>
+<body>
+
+<nav>
+  <button id="tab-bs" class="on" onclick="show('bs')">Buchungssätze</button>
+  <button id="tab-kr" onclick="show('kr')">Kontenrahmen 1 bis 9</button>
+  <button id="tab-ew" onclick="show('ew')">Erfolgswirksam?</button>
+  <button id="tab-ref" onclick="show('ref')">Übersicht</button>
+</nav>
+
+<!-- ============ Buchungssätze ============ -->
+<section id="bs">
+  <div class="score" id="bs-score"></div>
+  <div class="case" id="bs-case"></div>
+  <div class="amount" id="bs-amount"></div>
+  <div class="t">
+    <div id="bs-soll" class="active" onclick="bsFocus('s')"><div class="h">Soll</div><div class="v blank" id="bs-soll-v">tippen</div></div>
+    <div id="bs-haben" onclick="bsFocus('h')"><div class="h">Haben</div><div class="v blank" id="bs-haben-v">tippen</div></div>
+  </div>
+  <div class="grid" id="bs-grid"></div>
+  <div id="bs-fb" class="hidden"></div>
+  <button id="bs-next" class="next hidden" onclick="bsNext()">Weiter</button>
+</section>
+
+<!-- ============ Kontenrahmen ============ -->
+<section id="kr" class="hidden">
+  <div class="score" id="kr-score"></div>
+  <div class="case">In welche Kontenklasse gehört dieses Konto?</div>
+  <div class="case" id="kr-item" style="color:var(--ink);font-size:32px;margin-bottom:14px"></div>
+  <div class="classes" id="kr-classes"></div>
+  <div id="kr-fb" class="hidden"></div>
+  <button id="kr-next" class="next hidden" onclick="krNext()">Weiter</button>
+</section>
+
+<!-- ============ Erfolgswirksam ============ -->
+<section id="ew" class="hidden">
+  <div class="score" id="ew-score"></div>
+  <div class="case" id="ew-case"></div>
+  <div class="amount" id="ew-bs"></div>
+  <div class="two">
+    <button onclick="ewAnswer(true)">Erfolgswirksam</button>
+    <button onclick="ewAnswer(false)">Erfolgsunwirksam</button>
+  </div>
+  <div id="ew-fb" class="hidden"></div>
+  <button id="ew-next" class="next hidden" onclick="ewNext()">Weiter</button>
+</section>
+
+<!-- ============ Übersicht ============ -->
+<section id="ref" class="hidden">
+  <h2>Kontenrahmen KMU: die neun Klassen</h2>
+  <table>
+    <tr><th>Nr.</th><th>Klasse</th><th>Beispiele</th></tr>
+    <tr><td class="n">1</td><td>Aktiven</td><td>Kasse, Post, Bank, Forderungen L+L, Warenvorrat, Mobiliar, Fahrzeuge, Maschinen, Immobilien</td></tr>
+    <tr><td class="n">2</td><td>Passiven</td><td>Verbindlichkeiten L+L, Bankverbindlichkeiten, Darlehen, Hypothek, Eigenkapital, Privat</td></tr>
+    <tr><td class="n">3</td><td>Betrieblicher Ertrag aus Lieferungen und Leistungen</td><td>Warenertrag, Dienstleistungsertrag, Honorarertrag, Erlösminderungen (Skonti, Rabatte)</td></tr>
+    <tr><td class="n">4</td><td>Aufwand für Material, Handelswaren, Dienstleistungen und Energie</td><td>Warenaufwand, Materialaufwand, Aufwand für Drittleistungen</td></tr>
+    <tr><td class="n">5</td><td>Personalaufwand</td><td>Lohnaufwand, Sozialversicherungsaufwand, übriger Personalaufwand</td></tr>
+    <tr><td class="n">6</td><td>Übriger betrieblicher Aufwand, Abschreibungen, Finanzergebnis</td><td>Raumaufwand, Unterhalt und Reparaturen, Fahrzeugaufwand, Versicherungen, Verwaltungsaufwand, Werbeaufwand, Abschreibungen, Zinsaufwand, Zinsertrag</td></tr>
+    <tr><td class="n">7</td><td>Betrieblicher Nebenerfolg</td><td>Liegenschaftsertrag und -aufwand, Ertrag aus Nebenbetrieben</td></tr>
+    <tr><td class="n">8</td><td>Betriebsfremder und ausserordentlicher Erfolg, Steuern</td><td>Betriebsfremder Aufwand und Ertrag, ausserordentlicher Aufwand und Ertrag, direkte Steuern</td></tr>
+    <tr><td class="n">9</td><td>Abschluss</td><td>Bilanz, Erfolgsrechnung</td></tr>
+  </table>
+  <p style="color:var(--mute);font-size:17px;margin-top:-16px">Merkhilfe: 1 und 2 sind die Bilanz. 3 ist der Ertrag aus dem Kerngeschäft. 4, 5, 6 sind die Aufwände (Waren, Personal, Rest). 7 und 8 sind Nebensachen. 9 schliesst ab.</p>
+
+  <h2>Kontenarten: wo nimmt das Konto zu?</h2>
+  <table>
+    <tr><th>Kontoart</th><th>Zunahme</th><th>Abnahme</th><th>Anfangsbestand</th><th>Saldo steht im</th></tr>
+    <tr><td>Aktivkonto</td><td>Soll</td><td>Haben</td><td>Soll</td><td>Haben</td></tr>
+    <tr><td>Passivkonto</td><td>Haben</td><td>Soll</td><td>Haben</td><td>Soll</td></tr>
+    <tr><td>Aufwandkonto</td><td>Soll</td><td>Haben (selten)</td><td>keiner</td><td>Haben</td></tr>
+    <tr><td>Ertragskonto</td><td>Haben</td><td>Soll (selten)</td><td>keiner</td><td>Soll</td></tr>
+  </table>
+
+  <h2>Gewinn und Verlust ausweisen</h2>
+  <table>
+    <tr><th></th><th>Erfolgsrechnung</th><th>Schlussbilanz 1</th></tr>
+    <tr><td>Gewinn</td><td>Soll (Aufwandseite)</td><td>Haben (Passivseite), beim Eigenkapital</td></tr>
+    <tr><td>Verlust</td><td>Haben (Ertragsseite)</td><td>Soll (Aktivseite)</td></tr>
+  </table>
+
+  <h2>Erfolgswirksam oder nicht?</h2>
+  <table>
+    <tr><td>Erfolgswirksam</td><td>Ein Aufwands- oder Ertragskonto ist beteiligt. Gewinn verändert sich.</td></tr>
+    <tr><td>Erfolgsunwirksam</td><td>Nur Bilanzkonten beteiligt. Aktivtausch, Passivtausch, Bilanzverlängerung oder Bilanzverkürzung.</td></tr>
+  </table>
+</section>
+
+<script>
+// ---------------- data
+const TYPE = {
+  "Kasse":"A","Bank":"A","Forderungen L+L":"A","Mobiliar":"A","Fahrzeuge":"A",
+  "Verbindlichkeiten L+L":"P","Bankverbindlichkeiten":"P","Darlehen":"P","Eigenkapital":"P",
+  "Personalaufwand":"AW","Raumaufwand":"AW","Werbeaufwand":"AW","Fahrzeugaufwand":"AW","Übriger Aufwand":"AW","Abschreibungen":"AW","Zinsaufwand":"AW",
+  "Dienstleistungsertrag":"E"
+};
+const PLAN = {
+  A:["Kasse","Forderungen L+L","Mobiliar","Verbindlichkeiten L+L","Bankverbindlichkeiten","Eigenkapital","Personalaufwand","Raumaufwand","Werbeaufwand","Übriger Aufwand","Abschreibungen","Dienstleistungsertrag"],
+  B:["Kasse","Bank","Forderungen L+L","Mobiliar","Fahrzeuge","Verbindlichkeiten L+L","Darlehen","Eigenkapital","Personalaufwand","Raumaufwand","Fahrzeugaufwand","Werbeaufwand","Übriger Aufwand","Abschreibungen","Zinsaufwand","Dienstleistungsertrag"]
+};
+// [Geschäftsfall, Soll, Haben, Betrag, Plan]
+const CASES = [
+ ["Versand von Honorarrechnungen an Kunden","Forderungen L+L","Dienstleistungsertrag",215,"A"],
+ ["Zahlung von Kunden auf das Bankkonto","Bankverbindlichkeiten","Forderungen L+L",165,"A"],
+ ["Lohnzahlung an die Sekretärin durch Banküberweisung","Personalaufwand","Bankverbindlichkeiten",40,"A"],
+ ["Werbeinserate bar bezahlt","Werbeaufwand","Kasse",2,"A"],
+ ["Barbezug ab Bank für die Geschäftskasse","Kasse","Bankverbindlichkeiten",4,"A"],
+ ["Kreditkauf eines Druckers","Mobiliar","Verbindlichkeiten L+L",1,"A"],
+ ["Bankzahlung für die Büromiete","Raumaufwand","Bankverbindlichkeiten",51,"A"],
+ ["Barkauf von Büromaterial","Übriger Aufwand","Kasse",2,"A"],
+ ["Lohnbezug der Inhaberin durch die Bank","Personalaufwand","Bankverbindlichkeiten",78,"A"],
+ ["Bankzahlung an Lieferanten","Verbindlichkeiten L+L","Bankverbindlichkeiten",1,"A"],
+ ["Abschreibung auf dem Mobiliar","Abschreibungen","Mobiliar",4,"A"],
+ ["Ein Kunde bezahlt seine Rechnung bar","Kasse","Forderungen L+L",6,"A"],
+ ["Bareinzahlung von der Kasse auf das Bankkonto","Bankverbindlichkeiten","Kasse",3,"A"],
+ ["Reinigung der Büroräume, per Bank bezahlt","Raumaufwand","Bankverbindlichkeiten",5,"A"],
+ ["Telefon- und Internetrechnung durch die Bank bezahlt","Übriger Aufwand","Bankverbindlichkeiten",2,"A"],
+ ["Flyer durch die Bank bezahlt","Werbeaufwand","Bankverbindlichkeiten",3,"A"],
+ ["Die Inhaberin legt privates Geld auf das Geschäftskonto ein","Bankverbindlichkeiten","Eigenkapital",20,"A"],
+ ["Kauf einer Kaffeemaschine für das Büro, bar bezahlt","Mobiliar","Kasse",1,"A"],
+ ["Rechnung für die Reparatur der Büromöbel erhalten, noch nicht bezahlt","Übriger Aufwand","Verbindlichkeiten L+L",1,"A"],
+ ["Eine offene Lieferantenrechnung wird bar bezahlt","Verbindlichkeiten L+L","Kasse",1,"A"],
+ ["Rechnungen an Kunden für Designaufträge","Forderungen L+L","Dienstleistungsertrag",190,"B"],
+ ["Kunden bezahlen ihre Rechnungen auf das Bankkonto","Bank","Forderungen L+L",168,"B"],
+ ["Lohnzahlung an den Praktikanten per Bank","Personalaufwand","Bank",24,"B"],
+ ["Ateliermiete per Bank bezahlt","Raumaufwand","Bank",30,"B"],
+ ["Online-Werbung per Bank bezahlt","Werbeaufwand","Bank",5,"B"],
+ ["Kreditkauf eines Computers","Mobiliar","Verbindlichkeiten L+L",8,"B"],
+ ["Barkauf von Druckerpapier","Übriger Aufwand","Kasse",3,"B"],
+ ["Teilrückzahlung des Darlehens durch die Bank","Darlehen","Bank",5,"B"],
+ ["Zinsen für das Darlehen durch die Bank bezahlt","Zinsaufwand","Bank",1,"B"],
+ ["Abschreibung auf dem Mobiliar","Abschreibungen","Mobiliar",4,"B"],
+ ["Aufnahme eines zusätzlichen Darlehens, Gutschrift auf das Bankkonto","Bank","Darlehen",10,"B"],
+ ["Treibstoff für den Lieferwagen bar bezahlt","Fahrzeugaufwand","Kasse",1,"B"],
+ ["Kreditkauf eines Lieferwagens","Fahrzeuge","Verbindlichkeiten L+L",30,"B"],
+ ["Bankzahlung an den Autohändler für den Lieferwagen","Verbindlichkeiten L+L","Bank",30,"B"],
+ ["Abschreibung auf den Fahrzeugen","Abschreibungen","Fahrzeuge",12,"B"],
+ ["Bareinzahlung von der Kasse auf das Bankkonto","Bank","Kasse",4,"B"],
+ ["Ein Kunde bezahlt seine Rechnung bar","Kasse","Forderungen L+L",6,"B"],
+ ["Reparatur des Lieferwagens, Rechnung erhalten, noch nicht bezahlt","Fahrzeugaufwand","Verbindlichkeiten L+L",2,"B"],
+ ["Der Inhaber legt privates Geld auf das Geschäftskonto ein","Bank","Eigenkapital",15,"B"],
+];
+const KR = [
+ ["Kasse",1],["Post",1],["Bank (Guthaben)",1],["Forderungen L+L",1],["Warenvorrat",1],["Mobiliar",1],["Fahrzeuge",1],["Maschinen",1],["Immobilien",1],["Wertschriften",1],
+ ["Verbindlichkeiten L+L",2],["Bankverbindlichkeiten",2],["Darlehen",2],["Hypothek",2],["Eigenkapital",2],["Privat",2],
+ ["Warenertrag",3],["Dienstleistungsertrag",3],["Honorarertrag",3],["Skonti an Kunden (Erlösminderung)",3],
+ ["Warenaufwand",4],["Materialaufwand",4],["Aufwand für Drittleistungen",4],
+ ["Lohnaufwand",5],["Sozialversicherungsaufwand",5],["Übriger Personalaufwand",5],
+ ["Raumaufwand",6],["Mietaufwand",6],["Unterhalt und Reparaturen",6],["Fahrzeugaufwand",6],["Versicherungsaufwand",6],["Verwaltungsaufwand",6],["Werbeaufwand",6],["Übriger betrieblicher Aufwand",6],["Abschreibungen",6],["Zinsaufwand",6],["Zinsertrag",6],
+ ["Liegenschaftsertrag (Nebenerfolg)",7],["Ertrag aus Nebenbetrieb",7],
+ ["Betriebsfremder Ertrag",8],["Ausserordentlicher Aufwand",8],["Direkte Steuern",8],
+ ["Bilanz (Abschlusskonto)",9],["Erfolgsrechnung (Abschlusskonto)",9],
+];
+const KRNAME = {1:"Aktiven",2:"Passiven",3:"Betrieblicher Ertrag",4:"Material-, Waren-, Dienstleistungs- und Energieaufwand",5:"Personalaufwand",6:"Übriger betrieblicher Aufwand, Abschreibungen, Finanzergebnis",7:"Betrieblicher Nebenerfolg",8:"Betriebsfremder und ausserordentlicher Erfolg, Steuern",9:"Abschluss"};
+
+// ---------------- helpers
+function shuffle(a){a=a.slice();for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]]}return a}
+function fb(el,ok,head,why){el.className="fb "+(ok?"ok":"bad");el.innerHTML=`<div class="head">${head}</div><div class="why">${why}</div>`}
+function reason(acc,side){
+  const t=TYPE[acc];
+  if(t==="A") return `${acc} ist ein Aktivkonto und nimmt ${side==="s"?"zu, also Soll":"ab, also Haben"}.`;
+  if(t==="P") return `${acc} ist ein Passivkonto und nimmt ${side==="s"?"ab, also Soll":"zu, also Haben"}.`;
+  if(t==="AW") return `${acc} ist Aufwand, Aufwand steht im Soll.`;
+  return `${acc} ist Ertrag, Ertrag steht im Haben.`;
+}
+function wirkung(c){const ew=["AW","E"].includes(TYPE[c[1]])||["AW","E"].includes(TYPE[c[2]]);return ew}
+function show(id){
+  for(const s of ["bs","kr","ew","ref"]){document.getElementById(s).classList.toggle("hidden",s!==id);document.getElementById("tab-"+s).classList.toggle("on",s===id)}
+}
+
+// ---------------- Buchungssätze
+let bsQ=shuffle(CASES), bsI=0, bsRight=0, bsDone=0, bsPick={s:null,h:null}, bsFocusSide="s";
+function bsRender(){
+  if(bsI>=bsQ.length){bsQ=shuffle(CASES);bsI=0}
+  const c=bsQ[bsI]; bsPick={s:null,h:null}; bsFocusSide="s";
+  document.getElementById("bs-score").textContent=`${bsRight} von ${bsDone} richtig`;
+  document.getElementById("bs-case").textContent=c[0];
+  document.getElementById("bs-amount").textContent=`Betrag ${c[3]} (in 1 000)`;
+  for(const s of ["soll","haben"]){const v=document.getElementById("bs-"+s+"-v");v.textContent="tippen";v.className="v blank"}
+  document.getElementById("bs-soll").className="active";document.getElementById("bs-haben").className="";
+  const g=document.getElementById("bs-grid"); g.innerHTML="";
+  for(const a of PLAN[c[4]]){const b=document.createElement("button");b.textContent=a;b.onclick=()=>bsChoose(a,b);g.appendChild(b)}
+  document.getElementById("bs-fb").className="hidden";document.getElementById("bs-next").classList.add("hidden");
+}
+function bsFocus(side){if(bsPick.s&&bsPick.h)return;bsFocusSide=side;document.getElementById("bs-soll").className=side==="s"?"active":"";document.getElementById("bs-haben").className=side==="h"?"active":""}
+function bsChoose(a,btn){
+  if(bsPick.s&&bsPick.h)return;
+  bsPick[bsFocusSide]=a;
+  const v=document.getElementById(bsFocusSide==="s"?"bs-soll-v":"bs-haben-v");v.textContent=a;v.className="v";
+  if(!bsPick.s) bsFocus("s"); else if(!bsPick.h) bsFocus("h"); else bsCheck();
+}
+function bsCheck(){
+  const c=bsQ[bsI]; const ok=bsPick.s===c[1]&&bsPick.h===c[2]; bsDone++; if(ok)bsRight++;
+  document.getElementById("bs-soll").className="";document.getElementById("bs-haben").className="";
+  for(const b of document.querySelectorAll("#bs-grid button")) b.disabled=true;
+  const el=document.getElementById("bs-fb");
+  const why=`${reason(c[1],"s")} ${reason(c[2],"h")} ${wirkung(c)?"Erfolgswirksam.":"Erfolgsunwirksam."}`;
+  fb(el,ok,ok?"Richtig":`Richtig wäre: ${c[1]} an ${c[2]}`,why);
+  document.getElementById("bs-score").textContent=`${bsRight} von ${bsDone} richtig`;
+  document.getElementById("bs-next").classList.remove("hidden");
+}
+function bsNext(){bsI++;bsRender()}
+
+// ---------------- Kontenrahmen
+let krQ=shuffle(KR), krI=0, krRight=0, krDone=0;
+function krRender(){
+  if(krI>=krQ.length){krQ=shuffle(KR);krI=0}
+  document.getElementById("kr-score").textContent=`${krRight} von ${krDone} richtig`;
+  document.getElementById("kr-item").textContent=krQ[krI][0];
+  const g=document.getElementById("kr-classes");g.innerHTML="";
+  for(let n=1;n<=9;n++){const b=document.createElement("button");b.textContent=n;b.onclick=()=>krAnswer(n);g.appendChild(b)}
+  document.getElementById("kr-fb").className="hidden";document.getElementById("kr-next").classList.add("hidden");
+}
+function krAnswer(n){
+  const [name,k]=krQ[krI]; const ok=n===k; krDone++; if(ok)krRight++;
+  for(const b of document.querySelectorAll("#kr-classes button")) b.disabled=true;
+  fb(document.getElementById("kr-fb"),ok,ok?`Richtig, Klasse ${k}`:`Nein, Klasse ${k}`,`${name}: ${KRNAME[k]}.`);
+  document.getElementById("kr-score").textContent=`${krRight} von ${krDone} richtig`;
+  document.getElementById("kr-next").classList.remove("hidden");
+}
+function krNext(){krI++;krRender()}
+
+// ---------------- Erfolgswirksam
+let ewQ=shuffle(CASES), ewI=0, ewRight=0, ewDone=0;
+function ewRender(){
+  if(ewI>=ewQ.length){ewQ=shuffle(CASES);ewI=0}
+  const c=ewQ[ewI];
+  document.getElementById("ew-score").textContent=`${ewRight} von ${ewDone} richtig`;
+  document.getElementById("ew-case").textContent=c[0];
+  document.getElementById("ew-bs").textContent=`${c[1]} an ${c[2]}, ${c[3]}`;
+  for(const b of document.querySelectorAll("#ew .two button")) b.disabled=false;
+  document.getElementById("ew-fb").className="hidden";document.getElementById("ew-next").classList.add("hidden");
+}
+function ewAnswer(v){
+  const c=ewQ[ewI]; const ok=v===wirkung(c); ewDone++; if(ok)ewRight++;
+  for(const b of document.querySelectorAll("#ew .two button")) b.disabled=true;
+  const why=wirkung(c)?"Ein Aufwands- oder Ertragskonto ist beteiligt, der Gewinn verändert sich.":"Nur Bilanzkonten beteiligt, der Gewinn bleibt gleich.";
+  fb(document.getElementById("ew-fb"),ok,ok?"Richtig":(wirkung(c)?"Nein, erfolgswirksam":"Nein, erfolgsunwirksam"),why);
+  document.getElementById("ew-score").textContent=`${ewRight} von ${ewDone} richtig`;
+  document.getElementById("ew-next").classList.remove("hidden");
+}
+function ewNext(){ewI++;ewRender()}
+
+bsRender();krRender();ewRender();
+</script>
+</body>
+</html>
